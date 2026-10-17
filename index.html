@@ -16,7 +16,7 @@
 .site-footer .footer-disclaimer{font-size:12px;color:#839ab8;margin-top:12px}
 .extra-controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px}.extra-controls select{width:auto;min-width:160px;flex:1}.extra-controls button{flex:0 0 auto}.stat-origin{font-size:11px;color:#7de0ae;margin-left:6px}.stat-remove{font-size:12px;padding:6px 9px;background:#6d3447}.extra-info{font-size:12px;color:#a9bdd9;line-height:1.6;margin-top:8px}
 
-/* V0.5h：錯誤與相關核對欄位分級提示 */
+/* V0.5i：錯誤與相關核對欄位分級提示 */
 input.field-error,select.field-error{border:2px solid #ff6676!important;background:#451d2b!important;box-shadow:0 0 0 3px rgba(255,92,111,.22)!important;outline:none}
 tr.row-error{background:rgba(255,78,101,.10)}
 tr.row-error td:first-child{color:#ffacb7;font-weight:800}
@@ -85,7 +85,7 @@ $('finals').innerHTML='<table><thead><tr><th>屬性</th><th>目前裝備數值�
 $('finals').querySelectorAll('[data-remove]').forEach(btn=>btn.onclick=()=>{extraManual.delete(btn.dataset.remove);syncStats();invalidateResearch()});
 appliedScrollBonus=nextBonus;const available=EXTRA_STATS.filter(k=>!keys.includes(k));$('extraStatSelect').innerHTML=available.map(k=>`<option value="${safe(k)}">${safe(k==='MaxHP'?'HP（MaxHP）':k==='MaxMP'?'MP（MaxMP）':k)}</option>`).join('');$('addExtraStat').disabled=!available.length;
 }
-function renderItem(){invalidateResearch();active=DATA.items.find(x=>x.name===$('item').value);if(!active)return;extraManual=new Set();appliedScrollBonus={};$('meta').innerHTML=`<b>${safe(active.job)} · ${safe(active.kind)}</b><br>標準屬性：${safe(active.baseText||'未列出')}<br>每階成長：${safe(active.growthText||'未提供')}`;syncStats();
+function renderItem(){invalidateResearch();active=DATA.items.find(x=>x.name===$('item').value);if(!active)return;syncGrowthLimit();extraManual=new Set();appliedScrollBonus={};$('meta').innerHTML=`<b>${safe(active.job)} · ${safe(active.kind)}</b><br>標準屬性：${safe(active.baseText||'未列出')}<br>每階成長：${safe(active.growthText||'未提供')}`;syncStats();
 $('scrolls').innerHTML='';appliedScrollBonus={};$('scrollHint').textContent=isWeapon(active)?'已載入對應武器的 10%／60%／100% 卷軸效果，選擇成功張數即可自動計算加成。':'只顯示「'+active.kind+'」對應卷軸。資料表沒有列出的卷軸不會虛構。';
 $('status').textContent='';$('grade').textContent='—';$('pr').textContent='—';$('verdict').textContent='等待分析';$('evaluation').textContent='輸入目前數值後按「分析這件裝備」。';$('forecast').textContent='尚未分析';$('advice').textContent='等待分析';$('contrib').innerHTML='';$('needle').style.left='0%';}
 function addScroll(){if(!active)return;const available=DATA.scrolls.filter(s=>matchScroll(s,active));
@@ -111,6 +111,19 @@ $('contrib').innerHTML='<h3>主要成長表現</h3>'+Object.entries(w).map(([k])
 $('forecast').innerHTML='<table><thead><tr><th>屬性</th><th>下階段</th><th>目前累計</th><th>最終可能</th></tr></thead><tbody>'+Object.entries(active.ranges).map(([k,[lo,hi]])=>`<tr><td>${safe(k)}${w[k]===undefined?' <small>（不評分）</small>':''}</td><td>${n===N?'MAX':`+${lo}～+${hi}`}</td><td>+${growth[k]}</td><td>+${growth[k]+lo*(N-n)}～+${growth[k]+hi*(N-n)}</td></tr>`).join('')+'</tbody></table>';
 const advice=n===N?'已經成長完成，可以直接依照左側評級判斷品質。':best<70?'🔴 成長潛力有限：即使剩餘階段都成長到最佳，仍難以達到 A 級。':best>=85?'🟢 建議繼續觀察：剩餘成長仍有機會達到 S 級以上。':'🟡 視培養成本決定：還有進步空間，但最高約為 A／B 級。';$('advice').innerHTML=`<b>${advice}</b><br><small>最佳最終評級：${grade(best)}；最差最終評級：${grade(worst)}。這是理論成長潛力，不包含練功成本或裝備價格。</small>`;
 lastAnalyzed={equipment_id:active.name,equipment_name:active.name,growth_stage:n,max_growth_stage:N,initial_stats:initial,scrolls:[...document.querySelectorAll('.scrollrow')].map(row=>({name:row.querySelector('select').value,count:Number(row.querySelector('.scrollcount').value)})).filter(x=>x.count>0),current_stats:final};$('status').textContent='✓ 分析完成。'+(customUsed?' 武器卷軸加成採你手動輸入的數值。':'')+' 初始數值若非實際確認，評級屬假設情境。';return true}catch(e){$('status').textContent='⚠ '+e.message;return false}}
+// 防具只允許 3 階；武器可選反轉 3 階或永恆 5 階。
+function syncGrowthLimit(){
+  const total=$('total');
+  const previous=Number(total.value);
+  const weapon=isWeapon(active);
+  total.innerHTML=weapon
+    ? '<option value="3">3 階（反轉）</option><option value="5">5 階（永恆）</option>'
+    : '<option value="3">3 階（防具上限）</option>';
+  total.value=weapon && previous===5?'5':'3';
+  total.disabled=!weapon;
+  total.title=weapon?'武器可選 3 階或 5 階':'防具最多成長 3 次，沒有永恆防具';
+  updateLevel();
+}
 function updateLevel(){const N=Number($('total').value),old=Number($('level').value);$('level').innerHTML=Array.from({length:N+1},(_,i)=>`<option value="${i}">${i} / ${N}${i===N?'（MAX）':''}</option>`).join('');$('level').value=old<=N?old:N}
 function invalidateResearch(){lastAnalyzed=null;const status=document.getElementById('researchStatus');if(status)status.textContent='請完成分析後，再選擇是否提交研究樣本。';const btn=document.getElementById('researchSubmit');if(btn)btn.disabled=true;}
 function researchReady(){const btn=$('researchSubmit');btn.disabled=!lastAnalyzed;}
